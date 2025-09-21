@@ -1,4 +1,4 @@
-// server.js — Fixed Final Version
+// server.js — Final OpenSSL RNG version
 import express from "express";
 import http from "http";
 import { Server } from "socket.io";
@@ -15,13 +15,19 @@ const io = new Server(server, { cors: { origin: "*" } });
 
 app.use(express.static(path.join(__dirname, "public")));
 
+// ---- RNG: Only OpenSSL RAND_bytes ----
+function generateDigit() {
+  const buf = crypto.randomBytes(4); // OpenSSL CSPRNG
+  const digit = buf.readUInt32BE(0) % 10;
+  return { digit, provider: "openssl" };
+}
+
 function scheduleNextRound() {
   const now = new Date();
   const nextMinute = new Date(Math.ceil((now.getTime() + 1000) / 60000) * 60000);
 
-  // Digit generate सिर्फ़ एक बार
-  const buf = crypto.randomBytes(4);
-  const digit = buf.readUInt32BE(0) % 10;
+  // Digit generate सिर्फ़ एक बार per round
+  const { digit, provider } = generateDigit();
 
   // Preview emit 40s पहले
   const previewAt = new Date(nextMinute.getTime() - 40000);
@@ -30,8 +36,9 @@ function scheduleNextRound() {
     io.emit("preview", {
       minuteBoundary: nextMinute.toISOString(),
       digit,
+      provider,
     });
-    console.log("Preview:", digit, "for", nextMinute.toISOString());
+    console.log("Preview:", digit, "provider:", provider, "for", nextMinute.toISOString());
   }, Math.max(0, delayToPreview));
 
   // Reveal emit 00s पर (same digit)
@@ -40,8 +47,9 @@ function scheduleNextRound() {
     io.emit("reveal", {
       minuteBoundary: nextMinute.toISOString(),
       digit,
+      provider,
     });
-    console.log("Reveal:", digit, "for", nextMinute.toISOString());
+    console.log("Reveal:", digit, "provider:", provider, "for", nextMinute.toISOString());
 
     // अगला round schedule
     scheduleNextRound();
