@@ -1,15 +1,14 @@
 {
-  "name": "hackii-rng",
+  "name": "world-rng-mix",
   "version": "1.0.0",
-  "description": "Secure RNG server with Express and Socket.io",
-  "main": "server.js",
+  "type": "module",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
     "express": "^4.18.2",
-    "cors": "^2.8.5",
-    "socket.io": "^4.7.2"
+    "socket.io": "^4.7.2",
+    "node-fetch": "^3.3.2"
   },
   "engines": {
     "node": ">=16"
