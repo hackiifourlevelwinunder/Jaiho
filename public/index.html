@@ -1,0 +1,123 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>mixed rng (nist + openssl + fortuna + chacha20) — 0-9 digit</title>
+  <style>
+    body { font-family: inter, system-ui, sans-serif; background:#071023; color:#f0f7fb; padding:18px; }
+    .wrap { max-width:900px; margin:0 auto; }
+    .row { display:flex; gap:12px; flex-wrap:wrap; }
+    .card { background:#0b2233; padding:14px; border-radius:10px; flex:1 1 280px; }
+    h1 { margin:0 0 8px 0; font-size:20px; }
+    .clock { font-size:18px; font-weight:600; }
+    .digit { font-size:72px; font-weight:900; text-align:center; margin-top:10px; color:#4dabf7; }
+    .small { color:#9db5c7; font-size:13px; }
+    pre { background:#021522; padding:8px; border-radius:8px; font-size:12px; overflow:auto; max-height:140px; }
+    #status { margin-top:8px; color:#bfe3ff; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>mixed rng (nist + openssl + fortuna + chacha20)</h1>
+    <div class="small">preview appears 40 seconds before each minute; reveal happens at the minute boundary. final digit is mix of all methods.</div>
+    <div id="status">connecting…</div>
+    <div style="margin-top:12px;" class="row">
+      <div class="card">
+        <div class="small">us time (new york)</div>
+        <div id="usclock" class="clock">--:--:--</div>
+        <div class="small">india time (kolkata)</div>
+        <div id="inclock" class="clock">--:--:--</div>
+        <div style="margin-top:8px;" class="small" id="nextinfo">next: —</div>
+      </div>
+
+      <div class="card">
+        <div class="small">upcoming (preview)</div>
+        <div id="previewdigit" class="digit">-</div>
+        <div class="small" id="previewmeta"></div>
+      </div>
+
+      <div class="card">
+        <div class="small">current (revealed)</div>
+        <div id="revealdigit" class="digit">-</div>
+        <div class="small" id="revealmeta"></div>
+      </div>
+    </div>
+
+    <h3 style="margin-top:18px;">raw / debug</h3>
+    <pre id="raw">waiting for events…</pre>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+
+    const statusel = document.getelementbyid('status');
+    const previewdigit = document.getelementbyid('previewdigit');
+    const revealdigit = document.getelementbyid('revealdigit');
+    const previewmeta = document.getelementbyid('previewmeta');
+    const revealmeta = document.getelementbyid('revealmeta');
+    const raw = document.getelementbyid('raw');
+    const nextinfo = document.getelementbyid('nextinfo');
+
+    function fmtzone(now, zone) {
+      return new intl.datetimeformat('en-gb', { hour: '2-digit', minute:'2-digit', second:'2-digit', hour12:false, timezone: zone }).format(now);
+    }
+    function updateclocks() {
+      const now = new date();
+      document.getelementbyid('usclock').textcontent = fmtzone(now, 'america/new_york');
+      document.getelementbyid('inclock').textcontent = fmtzone(now, 'asia/kolkata');
+    }
+    setinterval(updateclocks, 1000);
+    updateclocks();
+
+    function setnextinfo(previewatiso, minuteboundaryiso) {
+      if (!previewatiso || !minuteboundaryiso) {
+        nextinfo.textcontent = 'next: —';
+        return;
+      }
+      const p = new date(previewatiso);
+      const m = new date(minuteboundaryiso);
+      const now = new date();
+      let diff = p.gettime() - now.gettime();
+      if (diff < 0) diff = 0;
+      const s = math.floor(diff/1000)%60;
+      nextinfo.textcontent = 'preview at ' + p.tolocalestring() + ' (in ' + s + 's), reveal at ' + m.tolocalestring();
+    }
+
+    socket.on('connect', ()=> {
+      statusel.textcontent = 'connected';
+    });
+    socket.on('disconnect', ()=> {
+      statusel.textcontent = 'disconnected — attempting reconnect';
+    });
+
+    socket.on('state', (st) => {
+      raw.textcontent = json.stringify(st, null, 2);
+      if (st.preview) {
+        previewdigit.textcontent = st.preview.digit ?? '-';
+        previewmeta.textcontent = 'preview at ' + st.previewatiso;
+      }
+      if (st.reveal) {
+        revealdigit.textcontent = st.reveal.digit ?? '-';
+        revealmeta.textcontent = 'revealed at ' + st.revealatiso;
+      }
+      setnextinfo(st.previewatiso, st.minuteboundaryiso);
+    });
+
+    socket.on('preview', (data) => {
+      raw.textcontent = 'preview event:\n' + json.stringify(data, null, 2) + '\n\n' + raw.textcontent;
+      previewdigit.textcontent = data.digit;
+      previewmeta.textcontent = 'hash: ' + (data.hash ? data.hash.slice(0,16) : '') + '...';
+      setnextinfo(data.previewat, data.minuteboundary);
+    });
+
+    socket.on('reveal', (data) => {
+      raw.textcontent = 'reveal event:\n' + json.stringify(data, null, 2) + '\n\n' + raw.textcontent;
+      revealdigit.textcontent = data.digit;
+      revealmeta.textcontent = 'hash: ' + (data.hash ? data.hash.slice(0,16) : '') + '...';
+    });
+  </script>
+</body>
+</html>
+￼enter
